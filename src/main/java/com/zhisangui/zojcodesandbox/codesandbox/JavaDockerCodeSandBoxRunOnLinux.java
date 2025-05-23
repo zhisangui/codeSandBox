@@ -8,6 +8,7 @@ import com.github.dockerjava.api.command.*;
 import com.github.dockerjava.api.model.*;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientBuilder;
+import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import com.github.dockerjava.transport.DockerHttpClient;
@@ -15,6 +16,7 @@ import com.zhisangui.zojcodesandbox.model.ExecuteCodeRequest;
 import com.zhisangui.zojcodesandbox.model.ExecuteCodeResponse;
 import com.zhisangui.zojcodesandbox.model.ExecuteMessage;
 import com.zhisangui.zojcodesandbox.model.JudgeInfo;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StopWatch;
 
@@ -30,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Docker 代码沙箱实现（模板方法模式）,该方法运行在服务器上，即连接本地docker
  */
-@Component
+@Slf4j
 public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
     public static void main(String[] args) {
         CodeSandBox codeSandBox = new JavaDockerCodeSandBoxRunOnLinux();
@@ -131,21 +133,26 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
                 .maxConnections(3000)
                 .build();
         dockerClient = DockerClientBuilder.getInstance().withDockerHttpClient(dockerHttpClient).build();
+        // ★上线的时候为了匹配服务器的java版本，修改为17
         String image = "openjdk:8-alpine";
-        List<Image> images = dockerClient.listImagesCmd().exec();
-        boolean isExist = false;
-        for (Image img : images) {
-            if (img.getRepoDigests()[0].contains("openjdk")) {
-                isExist = true;
-            }
-        }
+//        String image = "openjdk:17-alpine";
+
+        boolean isExist = true;
+        // todo：这里出现问题，一直 indexOutOfArray，因此默认为有吧，记得服务器先拉取一下
+//        List<Image> images = dockerClient.listImagesCmd().exec();
+//        for (Image img : images) {
+//            if (img.getRepoDigests()[0].contains("openjdk")) {
+//                isExist = true;
+//            }
+//        }
         // 1.1 不存在则拉取镜像
         if (!isExist) {
+            log.info("start pull image");
             PullImageCmd pullImageCmd = dockerClient.pullImageCmd(image);
             PullImageResultCallback pullImageResultCallback = new PullImageResultCallback() {
                 @Override
                 public void onNext(PullResponseItem item) {
-                    System.out.println("下载镜像：" + item.getStatus());
+                    log.info("pulling image...");
                     super.onNext(item);
                 }
             };
@@ -154,32 +161,17 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            System.out.println("下载完成");
+            log.info("pull image end");
         }
 
-        // 2. 创建容器(创建映射关系，将本地的用户代码映射到服务器上) （可以在容器进行限制操作，如访问网络等）
-        CreateContainerCmd createContainerCmd = dockerClient.createContainerCmd(image);
-        HostConfig hostConfig = new HostConfig();
-        hostConfig.setBinds(new Bind(userCodeParentPath, new Volume("/app")));
-        hostConfig.withCpuCount(2L)
+        // 2. 创建容器(创建映射关系，将本地的用户代码映射到容器上) （使用 HostConfig 在容器内进行限制操作，如访问网络，cpu使用等）
+        CreateContainerCmd createContainerCmd = dockerClient.createContainerCmd(image)
+                .withName("codeSandBox");
+        HostConfig hostConfig = new HostConfig()
+                .withBinds(new Bind(userCodeParentPath, new Volume("/app")))
+                .withCpuCount(2L)
                 .withMemorySwap(0L)
                 .withMemory(256 * 1000 * 1000L);
-        // todo: seccomp了解
-        // profile.json文件： {
-        //  "defaultAction": "SCMP_ACT_ALLOW",
-        //  "syscalls": [
-        //    {
-        //      "name": "write",
-        //      "action": "SCMP_ACT_ALLOW"
-        //    },
-        //    {
-        //      "name": "read",
-        //      "action": "SCMP_ACT_ALLOW"
-        //    }
-        //  ]
-        //}
-        // String profileConfig = ResourceUtil.readUtf8Str("profile.json");
-        // hostConfig.withSecurityOpts(Arrays.asList("seccomp=" + profileConfig));
         CreateContainerResponse createContainerResponse = createContainerCmd
                 .withHostConfig(hostConfig)
                 .withNetworkDisabled(false)
@@ -195,13 +187,13 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
 
         // 4. 在容器中执行代码并获取结果
         // 创建需要在容器执行的命令 (容器内执行命令的方式 docker exec {container} {command})
-
-//        return this.runProcessByArgs(inputs);
+        // return this.runProcessByArgs(inputs);
         return this.runInteractProcess(inputs);
     }
 
     /**
      * 通过流的方式将输入传给程序
+     *
      * @param inputs
      * @return
      */
@@ -273,11 +265,13 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
 //                                msgBuilder.append(payload);
 //                                System.out.println("payload: " + payload);
                                 if (StreamType.STDOUT.equals(streamType)) {
-                                    System.out.println("stdout: " + payload);
+//                                    System.out.println("stdout: " + payload);
+                                    log.info("stdout: {}", payload);
                                     msgBuilder.append(payload);
                                 }
                                 if (StreamType.STDERR.equals(streamType)) {
-                                    System.out.println("stderr: " + payload);
+                                    log.info("stderr: {}", payload);
+//                                    System.out.println("stderr: " + payload);
                                     errorMsgBuilder.append(payload);
                                 }
                                 super.onNext(frame);
@@ -309,6 +303,7 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
 
     /**
      * 通过main方法的参数来获取程序输入
+     *
      * @param inputs 程序输入
      * @return
      */
@@ -317,6 +312,7 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
         for (String input : inputs) {
             String[] s = input.split(" ");
             String[] cmd = ArrayUtil.append(new String[]{"java", "-cp", "/app", "Main"}, s);
+
             ExecCreateCmdResponse execCreateCmdResponse = dockerClient.execCreateCmd(containerId)
                     .withCmd(cmd)
                     .withAttachStderr(true)
@@ -424,6 +420,7 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
     @Override
     public boolean closeResource(File userCodeFile, String userCodeParentPath) {
         dockerClient.removeContainerCmd(containerId).withForce(true).exec();
+        log.info("移除容器");
         return super.closeResource(userCodeFile, userCodeParentPath);
     }
 }

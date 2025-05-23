@@ -28,7 +28,6 @@ import java.util.concurrent.TimeUnit;
  * Docker 代码沙箱实现（模板方法模式）
  * todo ：该方法运行在本地，远程连接服务器的docker，不过暂未解决将win的代码同步到docker。
  */
-@Component
 public class JavaDockerCodeSandBox extends JavaCodeSandBoxTemplate {
     public static void main(String[] args) {
         CodeSandBox codeSandBox = new JavaDockerCodeSandBox();
@@ -104,22 +103,6 @@ public class JavaDockerCodeSandBox extends JavaCodeSandBoxTemplate {
         hostConfig.withCpuCount(2L)
                 .withMemorySwap(0L)
                 .withMemory(256 * 1000 * 1000L);
-        // todo: seccomp了解
-        // profile.json文件： {
-        //  "defaultAction": "SCMP_ACT_ALLOW",
-        //  "syscalls": [
-        //    {
-        //      "name": "write",
-        //      "action": "SCMP_ACT_ALLOW"
-        //    },
-        //    {
-        //      "name": "read",
-        //      "action": "SCMP_ACT_ALLOW"
-        //    }
-        //  ]
-        //}
-        // String profileConfig = ResourceUtil.readUtf8Str("profile.json");
-        // hostConfig.withSecurityOpts(Arrays.asList("seccomp=" + profileConfig));
         CreateContainerResponse createContainerResponse = createContainerCmd
                 .withHostConfig(hostConfig)
                 .withNetworkDisabled(false)

@@ -1,17 +1,20 @@
 package com.zhisangui.zojcodesandbox.controller;
 
 import com.zhisangui.zojcodesandbox.codesandbox.CodeSandBox;
+import com.zhisangui.zojcodesandbox.codesandbox.CodeSandBoxFactory;
 import com.zhisangui.zojcodesandbox.model.ExecuteCodeRequest;
 import com.zhisangui.zojcodesandbox.model.ExecuteCodeResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 
 @CrossOrigin
-@RestController("/")
+@RestController
+@RequestMapping("/")
 public class ExampleController {
-    @Resource
-    private CodeSandBox javaDockerCodeSandBoxRunOnLinux;
+    @Autowired
+    private CodeSandBoxFactory codeSandBoxFactory;
 
 
     @GetMapping("/health")
@@ -21,6 +24,6 @@ public class ExampleController {
 
     @PostMapping("/executeCode")
     public ExecuteCodeResponse executeCode(@RequestBody ExecuteCodeRequest executeCodeRequest) {
-        return javaDockerCodeSandBoxRunOnLinux.executeCode(executeCodeRequest);
+        return codeSandBoxFactory.getCodeSandBox(executeCodeRequest.getLanguage()).executeCode(executeCodeRequest);
     }
 }

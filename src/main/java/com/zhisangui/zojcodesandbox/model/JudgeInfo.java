@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 public class JudgeInfo {
     /**
-     * 程序结果信息(todo,该变量还没有用）
+     * 程序结果信息(在代码沙箱中该变量未使用，在 judge 模块用来存放代码结果，如AC、WA、TLE）
      */
     private String message;
 

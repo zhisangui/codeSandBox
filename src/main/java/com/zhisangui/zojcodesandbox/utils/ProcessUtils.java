@@ -10,6 +10,12 @@ import java.io.*;
  */
 public class ProcessUtils {
 
+
+    public static long getUsedMemory() {
+        Runtime runtime = Runtime.getRuntime();
+        return runtime.totalMemory() - runtime.freeMemory();
+    }
+
     /**
      * 获取进程执行的相关信息
      *
@@ -20,11 +26,12 @@ public class ProcessUtils {
     public static ExecuteMessage getExecuteMessage(Process process, String status) {
         ExecuteMessage executeMessage = new ExecuteMessage();
         try {
+            // 计算出来的 memory 仅供参考
+            Long startMemory = getUsedMemory();
             StopWatch stopWatch = new StopWatch();
             stopWatch.start();
             int exitValue = process.waitFor();
             executeMessage.setExitValue(exitValue);
-            // todo: 时间和内存还没有进行记录
 
             // 正常返回
             StringBuilder stringBuilder = new StringBuilder();
@@ -49,7 +56,10 @@ public class ProcessUtils {
                 executeMessage.setErrorMessage(errorMsgStringBuilder.toString());
             }
             stopWatch.stop();
+            Long endMemory = getUsedMemory();
             executeMessage.setTime(stopWatch.getLastTaskTimeMillis());
+            // 单位：kb
+            executeMessage.setMemory((endMemory - startMemory) / 1024);
             return executeMessage;
         } catch (InterruptedException | IOException e) {
             throw new RuntimeException(e);
