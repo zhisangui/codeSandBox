@@ -138,7 +138,6 @@ public class JavaDockerCodeSandBoxRunOnLinux extends JavaCodeSandBoxTemplate {
 //        String image = "openjdk:17-alpine";
 
         boolean isExist = true;
-        // todo：这里出现问题，一直 indexOutOfArray，因此默认为有吧，记得服务器先拉取一下
 //        List<Image> images = dockerClient.listImagesCmd().exec();
 //        for (Image img : images) {
 //            if (img.getRepoDigests()[0].contains("openjdk")) {

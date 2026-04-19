@@ -18,21 +18,15 @@ import java.util.List;
 import java.util.UUID;
 
 @Slf4j
-public abstract class JavaCodeSandBoxTemplate implements CodeSandBox {
+public abstract class PythonCodeSandBoxTemplate implements CodeSandBox {
     public static final String USER_CODE_DIR = "userCode";
-    public static final String CODE_NAME = "Main.java";
-    public static final String CLASS_NAME = "Main";
+    public static final String CODE_NAME = "main.py";
     public static final Long TIME_LIMIT = 1000L;
 
-
     /**
-     * 1. 获取用户的代码，并将用户的代码写入文件
-     *
-     * @param code 用户代码
-     * @return
+     * 1. 保存代码到文件
      */
     public File saveCodeToFile(String code) {
-        // 获取用户当前工作目录
         String userDir = System.getProperty("user.dir");
         String userCodeParentPath = userDir + File.separator + USER_CODE_DIR + File.separator + UUID.randomUUID();
         String userCodePath = userCodeParentPath + File.separator + CODE_NAME;
@@ -41,39 +35,18 @@ public abstract class JavaCodeSandBoxTemplate implements CodeSandBox {
     }
 
     /**
-     * 2. 对用户的代码进行编译（注意指定编码规则），并处理编译的信息，获得 class 文件
-     *
-     * @return
+     * 2. 执行Python代码
      */
-    public ExecuteMessage compileCode(String userCodePath) {
-        String compileCmd = "javac -encoding utf-8 " + userCodePath;
-        log.info("compile cmd: {}", compileCmd);
-        try {
-            Process compileProcess = Runtime.getRuntime().exec(compileCmd);
-            return ProcessUtils.getExecuteMessage(compileProcess, "compile");
-        } catch (Exception e) {
-            log.error("compile occur error: {}", e.getMessage());
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * 3. 运行用户的代码，附带输入用例作为参数输入
-     *
-     * @param inputs
-     * @param userCodeParentPath
-     * @return
-     */
-    public List<ExecuteMessage> executeCode(List<String> inputs, String userCodeParentPath) {
+    public List<ExecuteMessage> executeCode(List<String> inputs, String userCodePath) {
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for (String inputArgs : inputs) {
             try {
-                String securityManager = "E:\\java\\starProject\\zoj-code-sandbox\\src\\main\\resources\\securityManager";
-                // 设置安全管理器
-//                String execCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s;%s -Djava.security.manager=MySecurityManager %s", userCodeParentPath, securityManager, CLASS_NAME);
-                String execCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s %s", userCodeParentPath, CLASS_NAME);
+                // Python执行命令
+                String execCmd = String.format("python %s", userCodePath);
                 log.info("execCmd：{}", execCmd);
+
                 Process runProcess = Runtime.getRuntime().exec(execCmd);
+
                 // 超时控制
                 new Thread(() -> {
                     try {
@@ -84,6 +57,7 @@ public abstract class JavaCodeSandBoxTemplate implements CodeSandBox {
                         throw new RuntimeException(e);
                     }
                 }).start();
+
                 ExecuteMessage executeMessage = ProcessUtils.runInteractProcess(runProcess, inputArgs);
                 executeMessageList.add(executeMessage);
             } catch (IOException e) {
@@ -94,17 +68,15 @@ public abstract class JavaCodeSandBoxTemplate implements CodeSandBox {
     }
 
     /**
-     * 4. 封装返回值 executeCodeResponseI
-     *
-     * @return
+     * 3. 处理响应结果
      */
     public ExecuteCodeResponse processResponse(List<ExecuteMessage> executeMessageList) {
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         executeCodeResponse.setStatus(0);
         long time = 0L;
         List<String> outputs = new ArrayList<>();
+
         for (ExecuteMessage executeMessage : executeMessageList) {
-            // 返回值有不正常的
             if (StrUtil.isNotBlank(executeMessage.getErrorMessage())) {
                 executeCodeResponse.setStatus(1);
                 executeCodeResponse.setMessage(executeMessage.getErrorMessage());
@@ -113,6 +85,7 @@ public abstract class JavaCodeSandBoxTemplate implements CodeSandBox {
             time = Math.max(time, executeMessage.getTime());
             outputs.add(executeMessage.getMessage());
         }
+
         executeCodeResponse.setOutputs(outputs);
         JudgeInfo judgeInfo = new JudgeInfo();
         judgeInfo.setTime(time);
@@ -121,61 +94,36 @@ public abstract class JavaCodeSandBoxTemplate implements CodeSandBox {
     }
 
     /**
-     * 5. 关闭资源
-     *
-     * @param userCodeFile
-     * @param userCodeParentPath
-     * @return
+     * 4. 清理资源
      */
     public boolean closeResource(File userCodeFile, String userCodeParentPath) {
         if (userCodeFile.getParentFile() != null) {
             boolean del = FileUtil.del(userCodeParentPath);
-            log.info("delete {}", (del ? "succeed" : "failed"));
+            log.info("删除{}", (del ? "成功" : "失败"));
             return del;
         }
         log.info("删除成功");
         return true;
     }
 
-    /**
-     * 6. 封装异常结果
-     *
-     * @param e
-     * @return
-     */
-    private ExecuteCodeResponse getErrorResponse(Exception e) {
-        ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
-        executeCodeResponse.setJudgeInfo(new JudgeInfo());
-        executeCodeResponse.setMessage(e.getMessage());
-        executeCodeResponse.setStatus(1);
-        executeCodeResponse.setOutputs(new ArrayList<>());
-        return executeCodeResponse;
-    }
-
     @Override
     public ExecuteCodeResponse executeCode(ExecuteCodeRequest request) {
-        // 1. 获取用户代码，并写入文件
+        // 1. 保存代码到文件
         String code = request.getCode();
         File userCodeFile = saveCodeToFile(code);
 
-        // 2. 对用户的代码进行编译（注意指定编码规则），并处理编译的信息，获得 class 文件
-        log.info("compile start");
-        ExecuteMessage compiledExecuteMessage = compileCode(userCodeFile.getAbsolutePath());
-        log.info("compile end");
-
-        // 3. 运行用户的代码，附带输入用例作为参数输入
+        // 2. 执行代码
         List<String> inputs = request.getInputs();
-        List<ExecuteMessage> executeMessageList = executeCode(inputs, userCodeFile.getParentFile().getAbsolutePath());
+        List<ExecuteMessage> executeMessageList = executeCode(inputs, userCodeFile.getAbsolutePath());
 
-        // 4. 封装返回值 executeCodeResponseI
+        // 3. 处理响应
         ExecuteCodeResponse executeCodeResponse = processResponse(executeMessageList);
 
-        // 5. 关闭资源
+        // 4. 清理资源
         boolean b = closeResource(userCodeFile, userCodeFile.getParentFile().getAbsolutePath());
         if (!b) {
             throw new RuntimeException("关闭资源错误");
         }
         return executeCodeResponse;
     }
-
 }
