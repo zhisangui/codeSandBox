@@ -13,7 +13,7 @@ public class CodeSandBoxFactory {
                 codeSandBox = new JavaDockerCodeSandBoxRunOnLinux();
                 break;
             case "python":
-                codeSandBox = new PyDockerCodeSandBoxRunOnLinux();
+                codeSandBox = new PythonDockerCodeSandBox();
                 break;
             case "c++":
                 codeSandBox = new CppDockerCodeSandBoxRunOnLinux();
